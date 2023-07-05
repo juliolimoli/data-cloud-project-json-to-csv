@@ -24,4 +24,4 @@ jobs:
         if: ${{ github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main' }}
         run: |
           zip -j deploy.zip ./src/*
-          aws lambda update-function-code --function-name=data-cloud-project-convert-to-csv --zip-file=fileb://deploy.zip
+          aws lambda update-function-code --function-name=data-cloud-project-maps-convert-to-csv --zip-file=fileb://deploy.zip
