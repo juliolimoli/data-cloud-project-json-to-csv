@@ -1,0 +1,41 @@
+name: Open Pull Request development --> main
+on:
+  pull_request:
+    types:
+      - closed
+    branches: 
+      - 'development'
+jobs:
+  open_pull_request:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v2
+
+    - name: Echo some variables
+      env:
+        GITHUB_EVENT: ${{ toJson(github.event) }}
+        GITHUB_REF: ${{ github.ref }}
+      run: |
+        echo "${GITHUB_EVENT} | ${GITHUB_REF}"
+
+    - name: PR and branch validation
+      if: ${{ github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'development' }}
+      run: |
+        echo The PR was merged
+    # Install dependencies or perform any necessary setup steps here
+
+    - name: Open Pull Request
+      if: ${{ github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'development' }}
+      uses: peter-evans/create-pull-request@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        branch: 'development'
+        title: "Merge feature development to main"
+        body: |
+          This pull request aims to merge the development branch into the main branch after the merge.
+
+          Please review and merge if approved.
+        base: main
+        draft: false
+      
