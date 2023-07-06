@@ -142,14 +142,14 @@ def lambda_handler(event, context):
     # iterate over all files using the boto3
     for filename in all_filenames:
         print(filename)
-        key = prefix+filename
+        input_file_path = "tmp/"+filename
         s3_get_file(
             bucket=bucket,
-            key=key,
-            filename=filename,
+            key=filename,
+            filename=input_file_path,
             client=s3_client
         )
-        input_file_path = "tmp/"+filename
+        
         output_file_path = "tmp/"+filename[:-2]+"json"
 
         gunzip_file(
