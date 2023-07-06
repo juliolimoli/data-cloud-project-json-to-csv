@@ -1,20 +1,11 @@
 # libraries imports here
 import boto3
 from botocore.exceptions import ClientError
-import os
-from datetime import datetime
 import json
 import gzip
 import pandas as pd
+from io import BytesIO
 
-# receive event with odate
-# get all file names inside sor partition using the boto3
-# iterate over all files using the boto3
-# gunzip the .gz
-# create the pandas dataframe
-# iterate over the json
-# insert the values in the dataframe
-# save the dataframe in .csv
 event = {"odate": "20230704"}
 df_dict = {
         "place_id": [],
@@ -61,47 +52,29 @@ def s3_get_partition_files(
 def s3_get_file(
         bucket,
         key,
-        filename,
         client
         ):
-    print("get_file", bucket, key, filename)
+    print("get_file", bucket, key)
     try:
-        response = client.download_file(
+        response = client.get_object(
             Bucket=bucket,
-            Key=key,
-            Filename=filename,
-            ExtraArgs={
-                "ResponseContentDisposition": f"attachment; filename= {key}"
-                }
+            Key=key
         )
         print(response)
     except ClientError as e:
         print(e)
         return False
-    return True
-
-def clear_tmp_dir():
-    print("Clearing the tmp/ dir")
-    files = os.listdir('/tmp')
-    for file_name in files:
-        print("File clear:", file_name)
-        file_path = os.path.join('/tmp', file_name)
-        os.remove(file_path)
-
-def gunzip_file(input_file, output_file):
-    print("gunziping:", input_file, output_file)
-    with gzip.open(input_file, 'rb') as f_in:
-        with open(output_file, 'wb') as f_out:
-            f_out.writelines(f_in)
+    return response
 
 def get_nearby_json_values(file):
     print("get_nearby_json_values")
-    with open(file) as f:
-        dict_file = json.load(f)
-        print(dict_file)
+    dict_file = json.load(file)
+    print(dict_file)
     for place in dict_file["results"]:
         for key in df_dict.keys():
             df_dict[key].append(place.get(key))
+        df_dict["lat"].append(place["geometry"]["location"].get("lat"))
+        df_dict["lng"].append(place["geometry"]["location"].get("lng"))
 
 def s3_upload_file(
     bucket_name: str, 
@@ -153,32 +126,22 @@ def lambda_handler(event, context):
     # iterate over all files using the boto3
     for file_name in all_filenames:
         print(file_name)
-        input_file_path = "/tmp/"+file_name
 
-        clear_tmp_dir()
-
-        s3_get_file(
+        object_response = s3_get_file(
             bucket=bucket,
             key=file_name,
-            filename=input_file_path,
             client=s3_client
         )
-        
-        output_file_path = "/tmp/"+file_name[:-2]+"json"
+        object_body = object_response["Body"].read()
+        with gzip.GzipFile(fileobj=BytesIO(object_body), mode='rb') as fh:
+            get_nearby_json_values(file=fh)
 
-        gunzip_file(
-            input_file=input_file_path, 
-            output_file=output_file_path
-        )
+    csv_path = "/tmp/nearby.csv"
+    pd.DataFrame(df_dict).to_csv(path_or_buf=csv_path, index=False)
 
-        get_nearby_json_values(file=output_file_path)
-
-        csv_path = "tmp/nearby.csv"
-        pd.DataFrame(df_dict).to_csv(csv_path)
-
-        csv_key = prefix+csv_path[4:]
-        s3_upload_file(
-            bucket_name=destination_bucket,
-            file_key=csv_key,
-            file_path=csv_path
-        )
+    csv_key = prefix+csv_path[5:]
+    s3_upload_file(
+        bucket_name=destination_bucket,
+        file_key=csv_key,
+        file_path=csv_path
+    )
