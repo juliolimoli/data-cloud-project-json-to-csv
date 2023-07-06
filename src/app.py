@@ -69,7 +69,10 @@ def s3_get_file(
         response = client.download_file(
             Bucket=bucket,
             Key=key,
-            Filename=filename
+            Filename=filename,
+            ExtraArgs={
+                "ResponseContentDisposition": f"attachment; filename= {key}"
+                }
         )
         print(response)
     except ClientError as e:
@@ -150,7 +153,7 @@ def lambda_handler(event, context):
     # iterate over all files using the boto3
     for file_name in all_filenames:
         print(file_name)
-        input_file_path = "tmp/"+file_name
+        input_file_path = "/tmp/"+file_name
 
         clear_tmp_dir()
 
@@ -161,7 +164,7 @@ def lambda_handler(event, context):
             client=s3_client
         )
         
-        output_file_path = "tmp/"+file_name[:-2]+"json"
+        output_file_path = "/tmp/"+file_name[:-2]+"json"
 
         gunzip_file(
             input_file=input_file_path, 
