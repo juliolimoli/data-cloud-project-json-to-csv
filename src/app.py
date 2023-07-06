@@ -77,6 +77,14 @@ def s3_get_file(
         return False
     return True
 
+def clear_tmp_dir():
+    print("Clearing the tmp/ dir")
+    files = os.listdir('/tmp')
+    for file_name in files:
+        print("File clear:", file_name)
+        file_path = os.path.join('/tmp', file_name)
+        os.remove(file_path)
+
 def gunzip_file(input_file, output_file):
     print("gunziping:", input_file, output_file)
     with gzip.open(input_file, 'rb') as f_in:
@@ -140,17 +148,20 @@ def lambda_handler(event, context):
     )
     print(all_filenames)
     # iterate over all files using the boto3
-    for filename in all_filenames:
-        print(filename)
-        input_file_path = "tmp/"+filename
+    for file_name in all_filenames:
+        print(file_name)
+        input_file_path = "tmp/"+file_name
+
+        clear_tmp_dir()
+
         s3_get_file(
             bucket=bucket,
-            key=filename,
+            key=file_name,
             filename=input_file_path,
             client=s3_client
         )
         
-        output_file_path = "tmp/"+filename[:-2]+"json"
+        output_file_path = "tmp/"+file_name[:-2]+"json"
 
         gunzip_file(
             input_file=input_file_path, 
