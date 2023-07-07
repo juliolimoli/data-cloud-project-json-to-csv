@@ -195,7 +195,7 @@ def lambda_handler(event, context):
     df = pd.concat([df_nearby, df_details], axis=1)
     df.to_csv(path_or_buf=csv_path, index=False)
 
-    csv_key = f"gmaps/{odate}/{csv_path[5:]}"
+    csv_key = f"gmaps/nearby-details/{odate}/{csv_path[5:]}"
     s3_upload_file(
         bucket_name=destination_bucket,
         file_key=csv_key,
