@@ -5,6 +5,7 @@ import json
 import gzip
 import pandas as pd
 from io import BytesIO
+from datetime import datetime, timedelta
 
 df_dict_nearby = {
         "place_id": [],
@@ -147,9 +148,10 @@ def s3_upload_file(
 
 # lambda_handler function
 def lambda_handler(event, context):
-    print(event)
     # Define the initial variables
-    odate = event["odate"]
+    timestamp = datetime.now()
+    previous_day = timestamp - timedelta(days=1)
+    odate = previous_day.strftime("%Y%m%d")
     bucket = "dcpgm-sor"
     destination_bucket = "dcpgm-sot"
     prefix = f"gmaps/nearby/{odate}/"
