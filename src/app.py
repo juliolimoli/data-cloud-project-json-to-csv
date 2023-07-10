@@ -34,6 +34,16 @@ df_dict_details = {
         "website": []
     }
 
+def set_odate(event):
+    odate = event.get("odate")
+    if odate is None:
+        timestamp = datetime.now()
+        previous_day = timestamp - timedelta(days=1)
+        odate = previous_day.strftime("%Y%m%d")
+        return odate
+    else:
+        return odate
+
 def s3_get_partition_files(
         bucket,
         prefix,
@@ -149,9 +159,7 @@ def s3_upload_file(
 # lambda_handler function
 def lambda_handler(event, context):
     # Define the initial variables
-    timestamp = datetime.now()
-    previous_day = timestamp - timedelta(days=1)
-    odate = previous_day.strftime("%Y%m%d")
+    odate = set_odate(event=event)
     bucket = "dcpgm-sor"
     destination_bucket = "dcpgm-sot"
     prefix = f"gmaps/nearby/{odate}/"
