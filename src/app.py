@@ -18,6 +18,14 @@ df_dict_nearby = {
         "user_ratings_total": []
     }
 df_dict_details = {
+        "place_id": [],
+        "name": [],
+        "lat": [],
+        "lng": [],
+        "business_status": [],
+        "price_level": [],
+        "rating": [],
+        "user_ratings_total": [],
         "curbside_pickup": [],
         "dine_in": [],
         "delivery": [],
@@ -78,12 +86,7 @@ def s3_get_file(
         return False
     return response
 
-def get_nearby_json_values(
-        file,
-        all_filenames_details,
-        bucket,
-        s3_client
-        ):
+def get_nearby_json_values(file):
     print("get_nearby_json_values")
     dict_file = json.load(file)
     print(dict_file)
@@ -100,24 +103,6 @@ def get_nearby_json_values(
                 df_dict_nearby["lng"].append(
                     place["geometry"]["location"].get("lng")
                 )
-        place_id = place["place_id"]
-        for file_name_details in all_filenames_details:
-            print(file_name_details)
-            if place_id in file_name_details:
-                print(place_id)
-                print("details_filename", file_name_details, place_id)
-                object_response = s3_get_file(
-                    bucket=bucket,
-                    key=file_name_details,
-                    client=s3_client
-                )
-                object_body = object_response["Body"].read()
-                with gzip.GzipFile(
-                    fileobj=BytesIO(object_body),
-                    mode='rb'
-                    ) as fh:
-                    get_details_json_values(file=fh)
-                break
 
 def get_details_json_values(file):
     print("get_details_json_values")
@@ -125,7 +110,36 @@ def get_details_json_values(file):
     print(dict_file)
     for key in df_dict_details.keys():
         print(key)
-        df_dict_details[key].append(dict_file["result"].get(key))
+        if key not in ["lat", "lng"]:
+            df_dict_details[key].append(dict_file["result"].get(key))
+        elif key == "lat":
+            df_dict_details[key].append(
+                dict_file["result"]["geometry"]["location"].get(key)
+            )
+        elif key == "lng":
+            df_dict_details[key].append(
+                dict_file["result"]["geometry"]["location"].get(key)
+            )
+
+def add_to_dicts(
+        nearby_or_details,
+        all_filenames,
+        bucket,
+        s3_client
+        ):
+    for file_name in all_filenames:
+        print(file_name)
+        object_response = s3_get_file(
+            bucket=bucket,
+            key=file_name,
+            client=s3_client
+        )
+        object_body = object_response["Body"].read()
+        with gzip.GzipFile(fileobj=BytesIO(object_body), mode='rb') as fh:
+            if nearby_or_details == "nearby":
+                get_nearby_json_values(file=fh)
+            elif nearby_or_details == "details":
+                get_details_json_values(file=fh)
 
 def s3_upload_file(
     bucket_name: str, 
@@ -167,12 +181,12 @@ def lambda_handler(event, context):
     s3_client = boto3.client("s3")
 
     # get all file names inside sor partition using the boto3
-    all_filenames = s3_get_partition_files(
+    all_filenames_nearby = s3_get_partition_files(
         bucket=bucket,
         prefix=prefix,
         client=s3_client
     )
-    print(all_filenames)
+    print(all_filenames_nearby)
 
     all_filenames_details = s3_get_partition_files(
         bucket=bucket,
@@ -181,33 +195,37 @@ def lambda_handler(event, context):
     )
     print(all_filenames_details)
 
-    # iterate over all files using the boto3
-    for file_name in all_filenames:
-        print(file_name)
-
-        object_response = s3_get_file(
-            bucket=bucket,
-            key=file_name,
-            client=s3_client
+    add_to_dicts(
+        nearby_or_details="nearby",
+        all_filenames=all_filenames_nearby,
+        bucket=bucket,
+        s3_client=s3_client
         )
-        object_body = object_response["Body"].read()
-        with gzip.GzipFile(fileobj=BytesIO(object_body), mode='rb') as fh:
-            get_nearby_json_values(
-                file=fh,
-                all_filenames_details=all_filenames_details,
-                bucket=bucket,
-                s3_client=s3_client
-            )
+    add_to_dicts(
+        nearby_or_details="details",
+        all_filenames=all_filenames_details,
+        bucket=bucket,
+        s3_client=s3_client
+        )
 
-    csv_path = "/tmp/nearby.csv"
+    csv_path_nearby = "/tmp/nearby.csv"
+    csv_path_details = "/tmp/details.csv"
     df_nearby = pd.DataFrame(df_dict_nearby)
     df_details = pd.DataFrame(df_dict_details)
-    df = pd.concat([df_nearby, df_details], axis=1)
-    df.to_csv(path_or_buf=csv_path, index=False)
 
-    csv_key = f"gmaps/nearby-details/{odate}/{csv_path[5:]}"
+    df_nearby.to_csv(path_or_buf=csv_path_nearby, index=False)
+    df_details.to_csv(path_or_buf=csv_path_details, index=False)
+
+    csv_key_nearby = f"gmaps/nearby/{odate}/nearby.csv"
+    csv_key_details = f"gmaps/details/{odate}/details.csv"
+
     s3_upload_file(
         bucket_name=destination_bucket,
-        file_key=csv_key,
-        file_path=csv_path
+        file_key=csv_key_nearby,
+        file_path=csv_path_nearby
+    )
+    s3_upload_file(
+        bucket_name=destination_bucket,
+        file_key=csv_key_details,
+        file_path=csv_path_details
     )
