@@ -8,39 +8,46 @@ from io import BytesIO
 from datetime import datetime, timedelta
 
 df_dict_nearby = {
-        "place_id": [],
-        "name": [],
-        "lat": [],
-        "lng": [],
-        "business_status": [],
-        "price_level": [],
-        "rating": [],
-        "user_ratings_total": []
-    }
+    "place_id": [],
+    "name": [],
+    "lat": [],
+    "lng": [],
+    "business_status": [],
+    "price_level": [],
+    "rating": [],
+    "user_ratings_total": []
+}
 df_dict_details = {
-        "place_id": [],
-        "name": [],
-        "lat": [],
-        "lng": [],
-        "business_status": [],
-        "price_level": [],
-        "rating": [],
-        "user_ratings_total": [],
-        "curbside_pickup": [],
-        "dine_in": [],
-        "delivery": [],
-        "reservable": [],
-        "serves_lunch": [],
-        "serves_beer": [],
-        "serves_breakfast": [],
-        "serves_brunch": [],
-        "serves_dinner": [],
-        "serves_vegetarian_food": [],
-        "serves_wine": [],
-        "wheelchair_accessible_entrance": [],
-        "url": [],
-        "website": []
-    }
+    "place_id": [],
+    "name": [],
+    "lat": [],
+    "lng": [],
+    "business_status": [],
+    "price_level": [],
+    "rating": [],
+    "user_ratings_total": [],
+    "curbside_pickup": [],
+    "dine_in": [],
+    "delivery": [],
+    "reservable": [],
+    "serves_lunch": [],
+    "serves_beer": [],
+    "serves_breakfast": [],
+    "serves_brunch": [],
+    "serves_dinner": [],
+    "serves_vegetarian_food": [],
+    "serves_wine": [],
+    "wheelchair_accessible_entrance": [],
+    "url": [],
+    "website": []
+}
+df_dict_address_components = {
+    "place_id": [],
+    "country": [],
+    "state": [],
+    "city": [],
+    "neighborhood": [],
+}
 
 def set_odate(event):
     odate = event.get("odate")
@@ -119,6 +126,28 @@ def get_details_json_values(file):
         elif key == "lng":
             df_dict_details[key].append(
                 dict_file["result"]["geometry"]["location"].get(key)
+            )
+    df_dict_address_components["place_id"].append(
+        dict_file["result"]["place_id"].get("place_id")
+        )
+    address_components = dict_file["result"].get("address_components")
+    for component in address_components:
+        types = address_components["types"]
+        if "country" in types:
+            df_dict_address_components["country"].append(
+                component.get("long_name")
+            )
+        elif "administrative_area_level_1" in types:
+            df_dict_address_components["state"].append(
+                component.get("long_name")
+            )
+        elif "administrative_area_level_2" in types:
+            df_dict_address_components["city"].append(
+                component.get("long_name")
+            )
+        elif "sublocality_level_1" in types:
+            df_dict_address_components["neighborhood"].append(
+                component.get("long_name")
             )
 
 def add_to_dicts(
@@ -210,14 +239,24 @@ def lambda_handler(event, context):
 
     csv_path_nearby = "/tmp/nearby.csv"
     csv_path_details = "/tmp/details.csv"
+    csv_path_address_components = "/tmp/address_components.csv"
+
     df_nearby = pd.DataFrame(df_dict_nearby)
     df_details = pd.DataFrame(df_dict_details)
+    df_address_components = pd.DataFrame(df_dict_address_components)
 
     df_nearby.to_csv(path_or_buf=csv_path_nearby, index=False)
     df_details.to_csv(path_or_buf=csv_path_details, index=False)
+    df_address_components.to_csv(path_or_buf=csv_path_details, index=False)
+    
+    country = df_address_components["country"].value_counts().index[0]
+    state = df_address_components["state"].value_counts().index[0]
+    city = df_address_components["city"].value_counts().index[0]
+    partition = f"country={country}/state={state}/city={city}"
 
-    csv_key_nearby = f"gmaps/nearby/{odate}/nearby.csv"
-    csv_key_details = f"gmaps/details/{odate}/details.csv"
+    csv_key_nearby = f"gmaps/nearby/{partition}/nearby.csv"
+    csv_key_details = f"gmaps/details/{partition}/details.csv"
+    csv_key_address_components = f"gmaps/address/{partition}/address.csv"
 
     s3_upload_file(
         bucket_name=destination_bucket,
@@ -228,4 +267,9 @@ def lambda_handler(event, context):
         bucket_name=destination_bucket,
         file_key=csv_key_details,
         file_path=csv_path_details
+    )
+    s3_upload_file(
+        bucket_name=destination_bucket,
+        file_key=csv_key_address_components,
+        file_path=csv_path_address_components
     )
