@@ -128,11 +128,11 @@ def get_details_json_values(file):
                 dict_file["result"]["geometry"]["location"].get(key)
             )
     df_dict_address_components["place_id"].append(
-        dict_file["result"]["place_id"].get("place_id")
+        dict_file["result"].get("place_id")
         )
     address_components = dict_file["result"].get("address_components")
     for component in address_components:
-        types = address_components["types"]
+        types = component["types"]
         if "country" in types:
             df_dict_address_components["country"].append(
                 component.get("long_name")
@@ -245,18 +245,21 @@ def lambda_handler(event, context):
     df_details = pd.DataFrame(df_dict_details)
     df_address_components = pd.DataFrame(df_dict_address_components)
 
-    df_nearby.to_csv(path_or_buf=csv_path_nearby, index=False)
-    df_details.to_csv(path_or_buf=csv_path_details, index=False)
-    df_address_components.to_csv(path_or_buf=csv_path_details, index=False)
-    
     country = df_address_components["country"].value_counts().index[0]
     state = df_address_components["state"].value_counts().index[0]
     city = df_address_components["city"].value_counts().index[0]
     partition = f"country={country}/state={state}/city={city}"
 
-    csv_key_nearby = f"gmaps/nearby/{partition}/nearby.csv"
-    csv_key_details = f"gmaps/details/{partition}/details.csv"
-    csv_key_address_components = f"gmaps/address/{partition}/address.csv"
+    df_nearby.to_csv(path_or_buf=csv_path_nearby, index=False)
+    df_details.to_csv(path_or_buf=csv_path_details, index=False)
+    df_address_components.to_csv(
+        path_or_buf=csv_path_address_components,
+        index=False
+    )
+
+    csv_key_nearby = f"gmaps/nearby/{partition}/{odate}.csv"
+    csv_key_details = f"gmaps/details/{partition}/{odate}.csv"
+    csv_key_address_components = f"gmaps/address/{partition}/{odate}.csv"
 
     s3_upload_file(
         bucket_name=destination_bucket,
