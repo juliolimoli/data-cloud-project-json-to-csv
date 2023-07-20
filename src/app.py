@@ -131,24 +131,40 @@ def get_details_json_values(file):
         dict_file["result"].get("place_id")
         )
     address_components = dict_file["result"].get("address_components")
+    country = True
+    state = True
+    city = True
+    neighborhood = True
     for component in address_components:
         types = component["types"]
         if "country" in types:
             df_dict_address_components["country"].append(
                 component.get("long_name")
             )
+            country = False
         elif "administrative_area_level_1" in types:
             df_dict_address_components["state"].append(
                 component.get("long_name")
             )
+            state = False
         elif "administrative_area_level_2" in types:
             df_dict_address_components["city"].append(
                 component.get("long_name")
             )
+            city = False            
         elif "sublocality_level_1" in types:
             df_dict_address_components["neighborhood"].append(
                 component.get("long_name")
             )
+            neighborhood = False
+    if country:
+        df_dict_address_components["country"].append(None)
+    if state:
+        df_dict_address_components["state"].append(None)
+    if city:
+        df_dict_address_components["city"].append(None)
+    if neighborhood:
+        df_dict_address_components["neighborhood"].append(None)
 
 def add_to_dicts(
         nearby_or_details,
