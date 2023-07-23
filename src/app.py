@@ -7,16 +7,6 @@ import pandas as pd
 from io import BytesIO
 from datetime import datetime, timedelta
 
-df_dict_nearby = {
-    "place_id": [],
-    "name": [],
-    "lat": [],
-    "lng": [],
-    "business_status": [],
-    "price_level": [],
-    "rating": [],
-    "user_ratings_total": []
-}
 df_dict_details = {
     "place_id": [],
     "name": [],
@@ -44,9 +34,27 @@ df_dict_details = {
 df_dict_address_components = {
     "place_id": [],
     "country": [],
-    "state": [],
-    "city": [],
+    "administrative_area_level_1": [],
+    "administrative_area_level_2": [],
+    "administrative_area_level_3": [],
+    "administrative_area_level_4": [],
+    "administrative_area_level_5": [],
+    "administrative_area_level_6": [],
+    "administrative_area_level_7": [],
     "neighborhood": [],
+    "locality": [],
+    "sublocality_level_1": [],
+    "sublocality_level_2": [],
+    "sublocality_level_3": [],
+    "sublocality_level_4": [],
+    "sublocality_level_5": []
+}
+df_dict_opening_hours = {
+    "place_id": [],
+    "day_of_week": [],
+    "open_hour": [],
+    "close_hour": [],
+    "insert_timestamp": [],
 }
 
 def set_odate(event):
@@ -93,28 +101,13 @@ def s3_get_file(
         return False
     return response
 
-def get_nearby_json_values(file):
-    print("get_nearby_json_values")
+def add_to_dicts(file):
+    print("add values to dicts")
     dict_file = json.load(file)
     print(dict_file)
-    for place in dict_file["results"]:
-        for key in df_dict_nearby.keys():
-            print(place, key)
-            if key not in ["lat", "lng"]:
-                df_dict_nearby[key].append(place.get(key))
-            elif key == "lat":
-                df_dict_nearby["lat"].append(
-                    place["geometry"]["location"].get("lat")
-                )
-            elif key == "lng":
-                df_dict_nearby["lng"].append(
-                    place["geometry"]["location"].get("lng")
-                )
-
-def get_details_json_values(file):
-    print("get_details_json_values")
-    dict_file = json.load(file)
-    print(dict_file)
+    place_id = dict_file["result"]["place_id"]
+    insert_timestamp = datetime.now()
+    # details
     for key in df_dict_details.keys():
         print(key)
         if key not in ["lat", "lng"]:
@@ -127,47 +120,47 @@ def get_details_json_values(file):
             df_dict_details[key].append(
                 dict_file["result"]["geometry"]["location"].get(key)
             )
-    df_dict_address_components["place_id"].append(
-        dict_file["result"].get("place_id")
-        )
+    # address components
     address_components = dict_file["result"].get("address_components")
-    country = True
-    state = True
-    city = True
-    neighborhood = True
-    for component in address_components:
-        types = component["types"]
-        if "country" in types:
-            df_dict_address_components["country"].append(
+    for key in df_dict_address_components:
+        component_found = False
+        for component in address_components:
+            types = component["types"]
+            if key in types:
+                df_dict_address_components[key].append(
                 component.get("long_name")
-            )
-            country = False
-        elif "administrative_area_level_1" in types:
-            df_dict_address_components["state"].append(
-                component.get("long_name")
-            )
-            state = False
-        elif "administrative_area_level_2" in types:
-            df_dict_address_components["city"].append(
-                component.get("long_name")
-            )
-            city = False            
-        elif "sublocality_level_1" in types:
-            df_dict_address_components["neighborhood"].append(
-                component.get("long_name")
-            )
-            neighborhood = False
-    if country:
-        df_dict_address_components["country"].append(None)
-    if state:
-        df_dict_address_components["state"].append(None)
-    if city:
-        df_dict_address_components["city"].append(None)
-    if neighborhood:
-        df_dict_address_components["neighborhood"].append(None)
+                )
+                component_found = True
+                break
+        if not component_found and key != "place_id":
+            df_dict_address_components[key].append(None)
+    df_dict_address_components["place_id"].append(place_id)
+    # opening hours
+    try:
+        periods = dict_file["result"].get("opening_hours").get("periods")
+    except Exception as e:
+        print(e)
+    else:
+        for period in periods:
+            print(period)
+            period_close = period.get("close")
+            period_open = period.get("open")
+            day = None
+            time_close = None
+            time_open = None
+            if period_close is not None:
+                day = period_close.get("day")
+                time_close = period_close.get("time")
+            if period_open is not None:
+                day = period_open.get("day")
+                time_open = period_open.get("time")
+            df_dict_opening_hours["day_of_week"].append(day)
+            df_dict_opening_hours["close_hour"].append(time_close)
+            df_dict_opening_hours["open_hour"].append(time_open)      
+            df_dict_opening_hours["insert_timestamp"].append(insert_timestamp)
+            df_dict_opening_hours["place_id"].append(place_id)
 
-def add_to_dicts(
-        nearby_or_details,
+def get_json_value(
         all_filenames,
         bucket,
         s3_client
@@ -181,10 +174,7 @@ def add_to_dicts(
         )
         object_body = object_response["Body"].read()
         with gzip.GzipFile(fileobj=BytesIO(object_body), mode='rb') as fh:
-            if nearby_or_details == "nearby":
-                get_nearby_json_values(file=fh)
-            elif nearby_or_details == "details":
-                get_details_json_values(file=fh)
+            add_to_dicts(file=fh)
 
 def s3_upload_file(
     bucket_name: str, 
@@ -221,67 +211,54 @@ def lambda_handler(event, context):
     odate = set_odate(event=event)
     bucket = "dcpgm-sor"
     destination_bucket = "dcpgm-sot"
-    prefix = f"gmaps/nearby/{odate}/"
-    prefix_details = f"gmaps/details/{odate}/"
+    prefix_root = f"gmaps/details/{odate}"
     s3_client = boto3.client("s3")
 
     # get all file names inside sor partition using the boto3
-    all_filenames_nearby = s3_get_partition_files(
-        bucket=bucket,
-        prefix=prefix,
-        client=s3_client
-    )
-    print(all_filenames_nearby)
-
     all_filenames_details = s3_get_partition_files(
         bucket=bucket,
-        prefix=prefix_details,
+        prefix=prefix_root,
         client=s3_client
     )
     print(all_filenames_details)
 
-    add_to_dicts(
-        nearby_or_details="nearby",
-        all_filenames=all_filenames_nearby,
-        bucket=bucket,
-        s3_client=s3_client
-        )
-    add_to_dicts(
-        nearby_or_details="details",
+    get_json_value(
         all_filenames=all_filenames_details,
         bucket=bucket,
         s3_client=s3_client
         )
 
-    csv_path_nearby = "/tmp/nearby.csv"
-    csv_path_details = "/tmp/details.csv"
-    csv_path_address_components = "/tmp/address_components.csv"
+    
+    csv_path_details = "/tmp/details.csv.gz"
+    csv_path_address_components = "/tmp/address_components.csv.gz"
+    csv_path_opening_hours = "/tmp/opening_hours.csv.gz"
 
-    df_nearby = pd.DataFrame(df_dict_nearby)
     df_details = pd.DataFrame(df_dict_details)
     df_address_components = pd.DataFrame(df_dict_address_components)
+    df_opening_hours = pd.DataFrame(df_dict_opening_hours)
 
-    country = df_address_components["country"].value_counts().index[0]
-    state = df_address_components["state"].value_counts().index[0]
-    city = df_address_components["city"].value_counts().index[0]
-    partition = f"country={country}/state={state}/city={city}"
+    partition = f"year={odate[:4]}/month={odate[4:6]}/day={odate[6:8]}"
 
-    df_nearby.to_csv(path_or_buf=csv_path_nearby, index=False)
-    df_details.to_csv(path_or_buf=csv_path_details, index=False)
+    df_details.to_csv(
+        path_or_buf=csv_path_details, 
+        index=False,
+        compression='gzip'
+        )
     df_address_components.to_csv(
         path_or_buf=csv_path_address_components,
-        index=False
+        index=False,
+        compression='gzip'
+    )
+    df_opening_hours.to_csv(
+        path_or_buf=csv_path_opening_hours,
+        index=False,
+        compression='gzip'
     )
 
-    csv_key_nearby = f"gmaps/nearby/{partition}/{odate}.csv"
-    csv_key_details = f"gmaps/details/{partition}/{odate}.csv"
-    csv_key_address_components = f"gmaps/address/{partition}/{odate}.csv"
+    csv_key_details = f"gmaps/details/{partition}/details.csv.gz"
+    csv_key_address_components = f"gmaps/address/{partition}/address.csv.gz"
+    csv_key_hours = f"gmaps/hours/{partition}/hours.csv.gz"
 
-    s3_upload_file(
-        bucket_name=destination_bucket,
-        file_key=csv_key_nearby,
-        file_path=csv_path_nearby
-    )
     s3_upload_file(
         bucket_name=destination_bucket,
         file_key=csv_key_details,
@@ -291,4 +268,9 @@ def lambda_handler(event, context):
         bucket_name=destination_bucket,
         file_key=csv_key_address_components,
         file_path=csv_path_address_components
+    )
+    s3_upload_file(
+        bucket_name=destination_bucket,
+        file_key=csv_key_hours,
+        file_path=csv_path_opening_hours
     )
