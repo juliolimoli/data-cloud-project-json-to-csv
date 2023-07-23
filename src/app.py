@@ -56,11 +56,6 @@ df_dict_opening_hours = {
     "close_hour": [],
     "insert_timestamp": [],
 }
-df_dict_types = {
-    "place_id": [],
-    "type": [],
-    "insert_timestamp": []
-}
 
 def set_odate(event):
     odate = event.get("odate")
@@ -111,7 +106,6 @@ def add_to_dicts(file):
     dict_file = json.load(file)
     print(dict_file)
     place_id = dict_file["result"]["place_id"]
-    entities = ["details", "address_components", "oppening_hours", "types"]
     insert_timestamp = datetime.now()
     # details
     for key in df_dict_details.keys():
@@ -238,12 +232,10 @@ def lambda_handler(event, context):
     csv_path_details = "/tmp/details.csv.gz"
     csv_path_address_components = "/tmp/address_components.csv.gz"
     csv_path_opening_hours = "/tmp/opening_hours.csv.gz"
-    csv_path_types = "/tmp/types.csv.gz"
 
     df_details = pd.DataFrame(df_dict_details)
     df_address_components = pd.DataFrame(df_dict_address_components)
     df_opening_hours = pd.DataFrame(df_dict_opening_hours)
-    df_types = pd.DataFrame(df_dict_types)
 
     partition = f"year={odate[:4]}/month={odate[4:6]}/day={odate[6:8]}"
 
@@ -262,15 +254,10 @@ def lambda_handler(event, context):
         index=False,
         compression='gzip'
     )
-    df_types.to_csv(
-        path_or_buf=csv_path_types,
-        index=False,
-        compression='gzip'
-    )
+
     csv_key_details = f"gmaps/details/{partition}/details.csv.gz"
     csv_key_address_components = f"gmaps/address/{partition}/address.csv.gz"
     csv_key_hours = f"gmaps/hours/{partition}/hours.csv.gz"
-    csv_key_types = f"gmaps/types/{partition}/types.csv.gz"
 
     s3_upload_file(
         bucket_name=destination_bucket,
@@ -286,9 +273,4 @@ def lambda_handler(event, context):
         bucket_name=destination_bucket,
         file_key=csv_key_hours,
         file_path=csv_path_opening_hours
-    )
-    s3_upload_file(
-        bucket_name=destination_bucket,
-        file_key=csv_key_types,
-        file_path=csv_path_types
     )
