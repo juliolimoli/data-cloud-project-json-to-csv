@@ -51,9 +51,20 @@ df_dict_address_components = {
 }
 df_dict_opening_hours = {
     "place_id": [],
-    "day_of_week": [],
-    "open_hour": [],
-    "close_hour": [],
+    "day_1_open_hour": [],
+    "day_1_close_hour": [],
+    "day_2_open_hour": [],
+    "day_2_close_hour": [],
+    "day_3_open_hour": [],
+    "day_3_close_hour": [],
+    "day_4_open_hour": [],
+    "day_4_close_hour": [],
+    "day_5_open_hour": [],
+    "day_5_close_hour": [],
+    "day_6_open_hour": [],
+    "day_6_close_hour": [],
+    "day_7_open_hour": [],
+    "day_7_close_hour": [],
     "insert_timestamp": [],
 }
 
@@ -136,6 +147,11 @@ def add_to_dicts(file):
             df_dict_address_components[key].append(None)
     df_dict_address_components["place_id"].append(place_id)
     # opening hours
+    df_dict_opening_hours_mod = {
+        key: value + [None] 
+        for key, value in df_dict_opening_hours.items()
+        }
+    df_dict_opening_hours = df_dict_opening_hours_mod
     try:
         periods = dict_file["result"].get("opening_hours").get("periods")
     except Exception as e:
@@ -151,14 +167,19 @@ def add_to_dicts(file):
             if period_close is not None:
                 day = period_close.get("day")
                 time_close = period_close.get("time")
+                for d in range(1, 8):
+                    if d == day:
+                        column = f"day_{day}_close_hour"
+                        df_dict_opening_hours[column][-1] = time_close
             if period_open is not None:
                 day = period_open.get("day")
                 time_open = period_open.get("time")
-            df_dict_opening_hours["day_of_week"].append(day)
-            df_dict_opening_hours["close_hour"].append(time_close)
-            df_dict_opening_hours["open_hour"].append(time_open)      
-            df_dict_opening_hours["insert_timestamp"].append(insert_timestamp)
-            df_dict_opening_hours["place_id"].append(place_id)
+                for d in range(1, 8):
+                    if d == day:
+                        column = f"day_{day}_open_hour"
+                        df_dict_opening_hours[column][-1] = time_open 
+            df_dict_opening_hours["insert_timestamp"][-1] = insert_timestamp
+            df_dict_opening_hours["place_id"][-1] = place_id
 
 def get_json_value(
         all_filenames,
