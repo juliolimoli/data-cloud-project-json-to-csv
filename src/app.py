@@ -147,11 +147,8 @@ def add_to_dicts(file):
             df_dict_address_components[key].append(None)
     df_dict_address_components["place_id"].append(place_id)
     # opening hours
-    df_dict_opening_hours_mod = {
-        key: value + [None] 
-        for key, value in df_dict_opening_hours.items()
-        }
-    df_dict_opening_hours = df_dict_opening_hours_mod
+    for key, value in df_dict_opening_hours.items():
+        df_dict_opening_hours[key] = value + [None]
     try:
         periods = dict_file["result"].get("opening_hours").get("periods")
     except Exception as e:
